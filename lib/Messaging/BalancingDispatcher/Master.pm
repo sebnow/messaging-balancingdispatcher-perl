@@ -5,6 +5,7 @@ use warnings;
 
 use AE;
 use Const::Fast;
+use Data::UUID;
 use Log::Any qw($log);
 use Messaging::BalancingDispatcher::Node;
 use Messaging::BalancingDispatcher::Util::ZMQ qw(:all);
@@ -14,6 +15,8 @@ use ZMQ::LibZMQ3;
 __PACKAGE__->mk_ro_accessors(qw(watchers sockets zmq nodes config));
 const my %EVENT_HANDLERS => (
 	'advertisement' => \&handle_advertisment,
+	'work_requested' => \&handle_work_request,
+	'work_completed' => \&handle_work_completed,
 );
 
 const my %RESPONSES => (
@@ -59,21 +62,26 @@ sub run {
 
 sub _start_discovery_service {
 	my $self = shift;
-	my $endpoint = $self->config->{'discovery'}->{'endpoint'};
+	return $self->_start_service('discovery', ZMQ_REP);
+}
 
-	my $socket = $self->sockets->{'discovery'} = zmq_socket($self->zmq, ZMQ_REP);
+sub _start_service {
+	my ($self, $name, $sock_type) = @_;
+	my $endpoint = $self->config->{$name}->{'endpoint'};
+
+	my $socket = $self->sockets->{$name} = zmq_socket($self->zmq, $sock_type);
 	zmq_bind($socket, $endpoint);
 	my $fh = zmq_getsockopt($socket, ZMQ_FD);
 
-	$self->watchers->{'discovery'} = AE::io $fh, 0, sub {
+	$self->watchers->{$name} = AE::io $fh, 0, sub {
 		my $msg = zmq_msg_init();
 		while (my $data = receive_zmq_message($socket, $msg)) {
 			my $response = $self->handle_event(delete($data->{'event'}), $data);
-			send_zmq_message($socket, $response);
+			send_zmq_message($socket, $response) if defined($response);
 		}
-		delete $self->watchers->{'discovery'};
+		delete $self->watchers->{$name};
 	};
-	$log->debugf("Initialised node discovery service at '%s'", $endpoint);
+	$log->debugf("Initialised '%s' service at '%s'", $name, $endpoint);
 }
 
 sub handle_event {
@@ -90,9 +98,42 @@ sub handle_advertisment {
 	return $RESPONSES{'ack'};
 }
 
+sub handle_work_request {
+	my ($self, $message) = @_;
+	my $node = Messaging::BalancingDispatcher::Node->new($message->{'node'});
+	if(!defined($self->nodes->{$node->id})) {
+		$log->debugf("Unregistered node '%s' discovered", $node->id);
+		$self->add_node($node);
+	}
+	my $cid = generate_correlation_id();
+	$log->debugf("Dispatching work '%s' to node '%s'", $cid, $node->id);
+	return {
+		'event' => 'work',
+		'work' => {},
+		'node' => $message->{'node'},
+		'correlation_id' => $cid,
+	};
+}
+
+sub handle_work_completed {
+	my ($self, $message) = @_;
+	my $node = Messaging::BalancingDispatcher::Node->new($message->{'node'});
+	if(!defined($self->nodes->{$node->id})) {
+		$log->debugf("Unregistered node '%s' discovered", $node->id);
+		$self->add_node($node);
+	}
+	$log->debugf("Work completed '%s'", $message->{'correlation_id'});
+	return $RESPONSES{'ack'};
+}
+
 sub add_node {
 	my ($self, $node) = @_;
 	$self->nodes->{$node->id} = $node;
+}
+
+sub generate_correlation_id {
+	my $ug = Data::UUID->new();
+	return $ug->to_string($ug->create());
 }
 
 1;

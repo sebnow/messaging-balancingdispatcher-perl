@@ -21,6 +21,7 @@ my $builder = Module::Build->new(
 		'Exporter' => '',
 		'JSON' => '>=v2.0',
 		'Log::Any' => '',
+		'Promises' => '',
 		'ZMQ::Constants' => '',
 		'ZMQ::LibZMQ3' => '',
 	},

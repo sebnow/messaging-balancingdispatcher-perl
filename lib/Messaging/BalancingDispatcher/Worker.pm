@@ -43,8 +43,7 @@ sub run {
 	$self->init();
 	$self->_connect_to_discovery_service();
 	$self->advertise();
-	$self->request_work();
-	AE::cv->recv();
+	$self->request_work() while(1);
 	return;
 }
 

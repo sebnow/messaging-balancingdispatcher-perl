@@ -5,9 +5,11 @@ DESCRIPTION
     An implementation of the Master-Worker messaging pattern for
     distributing work, only to nodes that can work on it immediately.
 
-    This pattern enables increasing teh capcity of the system by the
+    This pattern enables increasing the capcity of the system by the
     addition of Messaging::BalancingDispatcher::Worker dynamically.
 
 AUTHORS
     Sebastian Nowicki <sebnow@gmail.com>
 
+CONTRIBUTORS
+    Will Dowling <opensource@autodeist.com>

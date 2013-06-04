@@ -16,7 +16,7 @@ An implementation of the Master-Worker messaging pattern for
 distributing work, only to nodes that can work on it immediately.
 
 This pattern enables increasing the capacity of the system by the
-addition of L<Messaging::BalancingDispatcher::Worker|Workers>
+addition of L<Workers|Messaging::BalancingDispatcher::Worker>
 dynamically.
 
 =head1 AUTHORS
